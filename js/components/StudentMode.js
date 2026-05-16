@@ -87,7 +87,18 @@ document.addEventListener('click', (e) => {
 // 1. Alternar Tags (Matérias, Formatos, etc.)
 document.addEventListener('click', (e) => {
     const tag = e.target.closest('.student-tag');
-    if (!tag || tag.textContent.includes('+ Novo')) return;
+    if (!tag) return;
+
+    if (tag.textContent.includes('+ Novo')) {
+        const input = document.getElementById('input-new-album');
+        if (input) input.value = '';
+        openOverlay('overlay-new-album');
+        
+        // Guardamos referências para inserção posterior
+        window._activeTagContainer = tag.parentNode;
+        window._plusNovoTag = tag;
+        return;
+    }
 
     // Se estiver em um grupo de escolha única (como Formato ou Qualidade)
     const parentCard = tag.closest('.student-card');
@@ -96,11 +107,30 @@ document.addEventListener('click', (e) => {
     
     const isSingleChoice = labelText.includes('FORMATO') || 
                           labelText.includes('QUALIDADE') || 
-                          labelText.includes('DESTINO');
+                          labelText.includes('DESTINO') ||
+                          labelText.includes('ÁLBUM');
 
     if (isSingleChoice) {
         tag.closest('.student-tags').querySelectorAll('.student-tag').forEach(t => t.classList.remove('active-tag'));
         tag.classList.add('active-tag');
+
+        // Habilitar botão confirmar no menu de captura
+        if (tag.closest('#overlay-capture-destination')) {
+            const confirmBtn = document.getElementById('btn-confirm-capture');
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.style.opacity = '1';
+            }
+        }
+
+        // Se for mudança de formato no overlay de exportação de documento
+        if (labelText.includes('FORMATO') && tag.closest('#overlay-doc-exportar')) {
+            const saveBtn = document.getElementById('btn-save-doc');
+            if (saveBtn) {
+                const format = tag.textContent.replace('.', ''); // Remove o ponto
+                saveBtn.textContent = `Salvar ${format}`;
+            }
+        }
     } else {
         // Seleção múltipla para matérias
         tag.classList.toggle('active-tag');
@@ -119,8 +149,52 @@ document.addEventListener('click', (e) => {
     btn.style.opacity = '0.7';
     setTimeout(() => btn.style.opacity = '1', 150);
 
-    if (actionText === 'Descartar' || actionText === 'Cancelar') {
+    if (actionText === 'Descartar' || actionText === 'Cancelar' || actionText === 'Pular') {
         if (overlay) closeOverlay(overlay.id);
+        
+        // Resetar botão se for o menu de captura
+        if (overlay && overlay.id === 'overlay-capture-destination') {
+            const confirmBtn = document.getElementById('btn-confirm-capture');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.style.opacity = '0.5';
+            }
+            overlay.querySelectorAll('.student-tag').forEach(t => t.classList.remove('active-tag'));
+        }
+        return;
+    }
+
+    if (actionText === 'Confirmar' && overlay && overlay.id === 'overlay-capture-destination') {
+        if (window.showNotification) window.showNotification('Captura salva no álbum!');
+        setTimeout(() => closeOverlay(overlay.id), 500);
+        
+        // Resetar para próxima vez
+        setTimeout(() => {
+            const confirmBtn = document.getElementById('btn-confirm-capture');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.style.opacity = '0.5';
+            }
+            overlay.querySelectorAll('.student-tag').forEach(t => t.classList.remove('active-tag'));
+        }, 1000);
+        return;
+    }
+
+    if (actionText === 'Criar' && overlay && overlay.id === 'overlay-new-album') {
+        const input = document.getElementById('input-new-album');
+        const name = input ? input.value.trim() : '';
+        
+        if (name && window._activeTagContainer && window._plusNovoTag) {
+            const newTag = document.createElement('span');
+            newTag.className = 'student-tag';
+            newTag.textContent = name;
+            window._activeTagContainer.insertBefore(newTag, window._plusNovoTag);
+            
+            closeOverlay('overlay-new-album');
+            setTimeout(() => newTag.click(), 300); // Seleciona automaticamente o novo
+        } else {
+            if (window.showNotification) window.showNotification('Digite um nome válido');
+        }
         return;
     }
 
@@ -142,7 +216,7 @@ document.addEventListener('click', (e) => {
     if (window.showNotification) {
         let message = 'Ação realizada!';
         if (actionText === 'Exportar para Google Docs' || actionText === 'Salvar no google docs') message = 'Exportação concluída!';
-        else if (actionText === 'Salvar PDF') message = 'Salvo com sucesso!';
+        else if (actionText.startsWith('Salvar')) message = 'Salvo com sucesso!';
         else if (actionText === 'Compartilhar') message = 'Compartilhado com sucesso!';
         else if (actionText.includes('Salvar')) message = 'Salvo com sucesso!';
         else if (actionText.includes('Exportar')) message = 'Exportação iniciada...';
